@@ -39,8 +39,8 @@ CHAINBASE_API_REALTIME = "https://api.chainbase.com/tops/v1/realtime-mining"
 
 # 同步配置
 TRANSLATOR_ENABLED = True
-SYNC_ZH_COUNT = 20  # 中文话题数量
-SYNC_EN_COUNT = 10  # 英文话题数量
+SYNC_ZH_COUNT = 3  # 中文话题数量
+SYNC_EN_COUNT = 0  # 英文话题数量
 
 # ============ 工具函数 ============
 
@@ -588,17 +588,10 @@ def update_parent_page_with_news_list(stories_with_pages: List[Dict]):
         payload = {"children": batch}
 
         try:
-            # 使用PATCH而不是POST来添加子内容
-            response = requests.patch(url, headers=headers, json=payload, timeout=30)
+            response = requests.post(url, headers=headers, json=payload, timeout=30)
             response.raise_for_status()
         except Exception as e:
             log_error(f"  添加内容到父页面失败: {e}")
-            if hasattr(e, 'response') and e.response is not None:
-                try:
-                    error_detail = e.response.json()
-                    log_error(f"  错误详情: {error_detail}")
-                except:
-                    log_error(f"  响应内容: {e.response.text[:500]}")
             return False
 
     log_success("父页面新闻列表已更新")
