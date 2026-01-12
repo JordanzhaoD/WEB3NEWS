@@ -546,18 +546,18 @@ def update_parent_page_with_news_list(stories_with_pages: List[Dict]):
             }
         })
 
-    # 4-20 区块（使用项目符号列表）
+    # 4-30 区块（使用项目符号列表）
     if len(stories_with_pages) > 3:
         children.append({
             "object": "block",
             "type": "heading_3",
             "heading_3": {
-                "rich_text": [{"type": "text", "text": {"content": "📋 其他热点 (4-20)"}}]
+                "rich_text": [{"type": "text", "text": {"content": f"📋 其他热点 (4-{len(stories_with_pages)})"}}]
             }
         })
 
-        # 添加4-20新闻列表
-        for item in stories_with_pages[3:20]:
+        # 添加4-N新闻列表（包含所有剩余新闻）
+        for item in stories_with_pages[3:]:
             story = item["story"]
             page_id = item["page_id"]
             keyword = story.get("keyword", "")
