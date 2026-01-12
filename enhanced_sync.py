@@ -355,6 +355,9 @@ def create_story_page(parent_page_id: str, story: Dict, lang: str,
         "children": children
     }
 
+    # 调试：打印parent_page_id
+    print(f"  🔧 创建页面到父页面: {parent_page_id}")
+
     try:
         response = requests.post(url, headers=headers, json=payload, timeout=30)
         response.raise_for_status()
@@ -613,9 +616,18 @@ def main():
     print("   (创建详细页面 + 推文数据 + 父页面新闻列表)")
     print("=" * 70)
 
+    # 调试：打印环境变量
+    print(f"\n🔧 配置信息:")
+    print(f"   NOTION_DATABASE_ID: {NOTION_DATABASE_ID}")
+    print(f"   NOTION_PARENT_PAGE_ID: {NOTION_PARENT_PAGE_ID}")
+
     # 检查配置
     if not NOTION_DATABASE_ID:
         log_error("NOTION_DATABASE_ID 未设置！")
+        return
+
+    if not NOTION_PARENT_PAGE_ID:
+        log_error("NOTION_PARENT_PAGE_ID 未设置！")
         return
 
     # 存储所有同步的故事和page_id
