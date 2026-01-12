@@ -356,7 +356,7 @@ def create_story_page(parent_page_id: str, story: Dict, lang: str,
     }
 
     # 调试：打印parent_page_id
-    print(f"  🔧 创建页面到父页面: {parent_page_id}")
+    print(f"  🔧 创建页面到父页面: {parent_page_id[:8]}...{parent_page_id[-8:]} (长度: {len(parent_page_id)})")
 
     try:
         response = requests.post(url, headers=headers, json=payload, timeout=30)
@@ -618,8 +618,8 @@ def main():
 
     # 调试：打印环境变量
     print(f"\n🔧 配置信息:")
-    print(f"   NOTION_DATABASE_ID: {NOTION_DATABASE_ID}")
-    print(f"   NOTION_PARENT_PAGE_ID: {NOTION_PARENT_PAGE_ID}")
+    print(f"   NOTION_DATABASE_ID: {NOTION_DATABASE_ID[:8]}...{NOTION_DATABASE_ID[-8:]} (长度: {len(NOTION_DATABASE_ID)})")
+    print(f"   NOTION_PARENT_PAGE_ID: {NOTION_PARENT_PAGE_ID[:8]}...{NOTION_PARENT_PAGE_ID[-8:]} (长度: {len(NOTION_PARENT_PAGE_ID)})")
 
     # 检查配置
     if not NOTION_DATABASE_ID:
