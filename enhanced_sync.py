@@ -431,18 +431,26 @@ def create_news_column_notion_standard(stories: List[Dict], title: str, lang_emo
         rank_emoji = rank_emojis[i-1]
 
         # TOP 3 使用heading_3（中号标题，与4-30统一风格）
+        # 构建rich_text数组，只有热度值>0时才显示热度
+        rich_text_parts = [
+            {"type": "text", "text": {"content": f"{rank_emoji} "}},
+            {
+                "type": "text",
+                "text": {"content": keyword, "link": {"url": page_url}}
+            }
+        ]
+
+        # 只有热度值大于0时才添加热度显示
+        if attention_score and attention_score > 0:
+            rich_text_parts.append(
+                {"type": "text", "text": {"content": f" · {attention_score:,}"}}
+            )
+
         column_children.append({
             "object": "block",
             "type": "heading_3",
             "heading_3": {
-                "rich_text": [
-                    {"type": "text", "text": {"content": f"{rank_emoji} "}},
-                    {
-                        "type": "text",
-                        "text": {"content": keyword, "link": {"url": page_url}}
-                    },
-                    {"type": "text", "text": {"content": f" · {attention_score:,}"}}
-                ]
+                "rich_text": rich_text_parts
             }
         })
 
@@ -465,18 +473,26 @@ def create_news_column_notion_standard(stories: List[Dict], title: str, lang_emo
             page_url = f"https://www.notion.so/{page_id.replace('-', '')}"
 
             # 使用bulleted_list_item（正常项目列表）
+            # 构建rich_text数组，只有热度值>0时才显示热度
+            rich_text_parts = [
+                {"type": "text", "text": {"content": f"{idx}. "}},
+                {
+                    "type": "text",
+                    "text": {"content": keyword, "link": {"url": page_url}}
+                }
+            ]
+
+            # 只有热度值大于0时才添加热度显示
+            if attention_score and attention_score > 0:
+                rich_text_parts.append(
+                    {"type": "text", "text": {"content": f" · {attention_score:,}"}}
+                )
+
             column_children.append({
                 "object": "block",
                 "type": "bulleted_list_item",
                 "bulleted_list_item": {
-                    "rich_text": [
-                        {"type": "text", "text": {"content": f"{idx}. "}},
-                        {
-                            "type": "text",
-                            "text": {"content": keyword, "link": {"url": page_url}}
-                        },
-                        {"type": "text", "text": {"content": f" · {attention_score:,}"}}
-                    ]
+                    "rich_text": rich_text_parts
                 }
             })
 
