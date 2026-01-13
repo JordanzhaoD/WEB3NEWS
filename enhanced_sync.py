@@ -459,7 +459,7 @@ def create_news_column_notion_standard(stories: List[Dict], title: str, lang_emo
             "object": "block",
             "type": "callout",
             "callout": {
-                "emoji": {"type": "emoji", "emoji": "📈"},
+                "emoji": "📈",
                 "rich_text": [
                     {"type": "text", "text": {"content": f"热度: {attention_score:,}"}}
                 ]
@@ -573,7 +573,7 @@ def update_parent_page_with_news_list(stories_with_pages: List[Dict]):
         "object": "block",
         "type": "callout",
         "callout": {
-            "emoji": {"type": "emoji", "emoji": "⏰"},
+            "emoji": "⏰",
             "rich_text": [
                 {"type": "text", "text": {"content": f"最后更新: "}},
                 {"type": "text", "text": {"content": f"{current_time} (北京时间) | "}},
