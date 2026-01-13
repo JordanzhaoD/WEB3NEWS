@@ -12,7 +12,7 @@ import requests
 import json
 import os
 import sys
-from datetime import datetime
+from datetime import datetime, timezone, timedelta
 from typing import List, Dict, Set
 import time
 
@@ -39,8 +39,8 @@ CHAINBASE_API_REALTIME = "https://api.chainbase.com/tops/v1/realtime-mining"
 
 # 同步配置
 TRANSLATOR_ENABLED = True
-SYNC_ZH_COUNT = 20  # 中文话题数量
-SYNC_EN_COUNT = 10  # 英文话题数量
+SYNC_ZH_COUNT = 30  # 中文话题数量
+SYNC_EN_COUNT = 30  # 英文话题数量
 
 # ============ 工具函数 ============
 
@@ -119,17 +119,17 @@ def translate_text_to_chinese(text: str) -> str:
 
 # ============ Notion函数 ============
 
-def create_story_page(parent_page_id: str, story: Dict, lang: str,
+def create_story_page(database_id: str, story: Dict, lang: str,
                        timeline: List[Dict], authors: List[Dict],
                        translated_summary: str = "") -> str:
     """
-    为故事创建详细的Notion页面（简化版，兼容Notion API）
+    为故事创建详细的Notion页面(直接在数据库中创建)
 
-    页面结构：
-    1. 标题（heading_2）
+    页面结构:
+    1. 标题(heading_2)
     2. 元数据区
     3. 摘要区
-    4. TOP QUOTES（推文列表）
+    4. TOP QUOTES(推文列表)
     5. 相关作者
     """
 
@@ -339,17 +339,28 @@ def create_story_page(parent_page_id: str, story: Dict, lang: str,
                 }
             })
 
-    # 创建页面
+    # 创建页面(在数据库中创建,避免被删除)
     payload = {
         "parent": {
-            "type": "page_id",
-            "page_id": parent_page_id
+            "type": "database_id",
+            "database_id": database_id
         },
         "properties": {
-            "title": {
+            "Name": {
                 "title": [{
                     "text": {"content": keyword[:100]}
                 }]
+            },
+            "语言": {
+                "select": {"name": "中文" if lang == "zh" else "英文"}
+            },
+            "话题ID": {
+                "rich_text": [{
+                    "text": {"content": story_id}
+                }]
+            },
+            "状态": {
+                "select": {"name": "🔥 热门"}
             }
         },
         "children": children
@@ -371,77 +382,141 @@ def create_story_page(parent_page_id: str, story: Dict, lang: str,
             log_error(f"  错误详情: {e.response.text[:200]}")
         return ""
 
-def add_database_entry(story: Dict, page_id: str, lang: str,
-                        tweet_count: int = 0, translated_summary: str = "") -> bool:
-    """在数据库中添加条目，链接到详细页面"""
-    url = "https://api.notion.com/v1/pages"
-    headers = {
-        "Authorization": f"Bearer {NOTION_API_KEY}",
-        "Content-Type": "application/json",
-        "Notion-Version": "2022-06-28"
-    }
+def create_news_column_notion_standard(stories: List[Dict], title: str, lang_emoji: str) -> List[Dict]:
+    """
+    创建符合Notion标准的单列新闻内容
 
-    story_id = story.get("id", "")
-    keyword = story.get("keyword", "")
-    summary = story.get("summary", "")
+    Notion标准最佳实践：
+    - 使用heading_1突出TOP 3（大号标题）
+    - 使用heading_3显示4-30（中号标题，统一格式）
+    - 使用callout突出重要信息
+    - 使用divider分隔不同区域
+    - 使用emoji增强视觉识别
 
-    # 摘要处理
-    if lang == "zh":
-        # 中文话题：直接显示原文
-        summary_short = summary[:100] + "..." if len(summary) > 100 else summary
-    else:
-        # 英文话题：组合原文和译文
-        if translated_summary:
-            summary_short = f"【原文】\n{summary[:100]}...\n\n【译文】\n{translated_summary[:100]}..."
-        else:
-            summary_short = summary[:100] + "..." if len(summary) > 100 else summary
+    参数：
+        stories: 该语言的新闻列表
+        title: 列标题（如"中文热点"）
+        lang_emoji: 语言emoji（如"🇨🇳"）
+    """
+    column_children = []
 
-    payload = {
-        "parent": {
-            "type": "database_id",
-            "database_id": NOTION_DATABASE_ID
-        },
-        "properties": {
-            "Name": {
-                "title": [{
-                    "text": {"content": keyword[:100]}
-                }]
-            },
-            "语言": {
-                "select": {"name": "中文" if lang == "zh" else "英文"}
-            },
-            "摘要": {
-                "rich_text": [{
-                    "text": {"content": summary_short}
-                }]
-            },
-            "话题ID": {
-                "rich_text": [{
-                    "text": {"content": story_id}
-                }]
-            },
-            "状态": {
-                "select": {"name": "🔥 热门"}
-            }
+    # 列标题 - 使用heading_2（中等大小）
+    column_children.append({
+        "object": "block",
+        "type": "heading_2",
+        "heading_2": {
+            "rich_text": [
+                {"type": "text", "text": {"content": f"{lang_emoji} {title} ({len(stories)}条)"}}
+            ]
         }
-    }
+    })
 
-    try:
-        response = requests.post(url, headers=headers, json=payload, timeout=10)
-        response.raise_for_status()
-        return True
-    except Exception as e:
-        log_error(f"  添加数据库条目失败: {e}")
-        return False
+    # 分隔线
+    column_children.append({
+        "object": "block",
+        "type": "divider",
+        "divider": {}
+    })
+
+    # TOP 3 区域标题
+    column_children.append({
+        "object": "block",
+        "type": "heading_2",
+        "heading_2": {
+            "rich_text": [{"type": "text", "text": {"content": "🔥 TOP 3"}}]
+        }
+    })
+
+    # 添加TOP 3新闻 - 使用heading_1（大号显示）
+    for i, item in enumerate(stories[:3], 1):
+        story = item["story"]
+        page_id = item["page_id"]
+        keyword = story.get("keyword", "")
+        attention_score = story.get("attention_score", 0)
+        page_url = f"https://www.notion.so/{page_id.replace('-', '')}"
+
+        # 根据排名使用奖牌emoji
+        rank_emojis = ["🥇", "🥈", "🥉"]
+        rank_emoji = rank_emojis[i-1]
+
+        # TOP 3 使用heading_1（大号标题）
+        column_children.append({
+            "object": "block",
+            "type": "heading_1",
+            "heading_1": {
+                "rich_text": [
+                    {"type": "text", "text": {"content": f"{rank_emoji} "}},
+                    {
+                        "type": "text",
+                        "text": {"content": keyword, "link": {"url": page_url}}
+                    }
+                ]
+            }
+        })
+
+        # 热度信息 - 使用callout突出显示
+        column_children.append({
+            "object": "block",
+            "type": "callout",
+            "callout": {
+                "emoji": {"type": "emoji", "emoji": "📈"},
+                "rich_text": [
+                    {"type": "text", "text": {"content": f"热度: {attention_score:,}"}}
+                ]
+            }
+        })
+
+    # 4-30 区域 - 统一使用heading_3（中号标题）
+    if len(stories) > 3:
+        column_children.append({
+            "object": "block",
+            "type": "divider",
+            "divider": {}
+        })
+
+        # 4-30 统一使用heading_3，不再分区
+        for item in stories[3:30]:
+            story = item["story"]
+            page_id = item["page_id"]
+            keyword = story.get("keyword", "")
+            attention_score = story.get("attention_score", 0)
+            page_url = f"https://www.notion.so/{page_id.replace('-', '')}"
+
+            # 4-30 统一使用heading_3（中号标题）
+            column_children.append({
+                "object": "block",
+                "type": "heading_3",
+                "heading_3": {
+                    "rich_text": [
+                        {"type": "text", "text": {"content": f"{item['rank']}. "}},
+                        {
+                            "type": "text",
+                            "text": {"content": keyword, "link": {"url": page_url}}
+                        },
+                        {"type": "text", "text": {"content": f" · {attention_score:,}"}}
+                    ]
+                }
+            })
+
+    return column_children
 
 def update_parent_page_with_news_list(stories_with_pages: List[Dict]):
     """
-    更新父页面，创建格式化的新闻列表（方案A：列表式布局）
+    更新父页面，创建符合Notion标准的左右两列新闻列表
+
+    Notion标准布局：
+    - 使用column_list创建左右两列
+    - 左列：中文30条
+    - 右列：英文30条（含翻译）
+    - TOP 3: heading_1（大号标题）
+    - 4-20: heading_3（中号标题）
+    - 21-30: bulleted_list（简洁列表）
+    - 使用callout、divider、emoji增强可读性
 
     参数：
         stories_with_pages: 包含story和page_id的字典列表
     """
-    log_info("更新父页面新闻列表...")
+    log_info("更新父页面新闻列表（Notion标准左右两列）...")
 
     url = f"https://api.notion.com/v1/blocks/{NOTION_PARENT_PAGE_ID}/children"
     headers = {
@@ -471,126 +546,84 @@ def update_parent_page_with_news_list(stories_with_pages: List[Dict]):
     except Exception as e:
         log_warning(f"  清空父页面失败: {e}")
 
-    # 2. 准备新的页面内容
+    # 2. 分离中英文新闻
+    zh_stories = [s for s in stories_with_pages if s.get("lang") == "zh"]
+    en_stories = [s for s in stories_with_pages if s.get("lang") == "en"]
+
+    log_info(f"  中文新闻: {len(zh_stories)} 条")
+    log_info(f"  英文新闻: {len(en_stories)} 条")
+
+    # 3. 准备新的页面内容（遵循Notion标准）
     children = []
 
-    # 标题区
-    current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    # 主标题区 - 使用heading_1
+    beijing_tz = timezone(timedelta(hours=8))
+    current_time = datetime.now(beijing_tz).strftime("%Y-%m-%d %H:%M:%S")
+
     children.append({
         "object": "block",
         "type": "heading_1",
         "heading_1": {
-            "rich_text": [{"type": "text", "text": {"content": "📰 WEB3 新闻热点"}}]
+            "rich_text": [{"type": "text", "text": {"content": "🌐 WEB3 新闻热点 (中英双语)"}}]
         }
     })
 
+    # 更新信息 - 使用callout突出显示
     children.append({
         "object": "block",
         "type": "callout",
         "callout": {
+            "emoji": {"type": "emoji", "emoji": "⏰"},
             "rich_text": [
-                {"type": "text", "text": {"content": f"⏰ 最后更新: {current_time} | "}},
-                {"type": "text", "text": {"content": "🔄 每2小时自动同步 | "}},
-                {"type": "text", "text": {"content": "💎 Less Noise, More Signal"}}
+                {"type": "text", "text": {"content": f"最后更新: ", "bold": True}},
+                {"type": "text", "text": {"content": f"{current_time} (北京时间) | "}},
+                {"type": "text", "text": {"content": f"共{len(stories_with_pages)}条新闻", "bold": True}}
             ]
         }
     })
 
-    # TOP 3 区块（使用大号标题）
+    # 分隔线
     children.append({
         "object": "block",
-        "type": "heading_1",
-        "heading_1": {
-            "rich_text": [{"type": "text", "text": {"content": "🔥 TOP 3 热点"}}]
+        "type": "divider",
+        "divider": {}
+    })
+
+    # 创建符合Notion标准的左右两列
+    left_column_children = create_news_column_notion_standard(zh_stories, "中文热点", "🇨🇳")
+    right_column_children = create_news_column_notion_standard(en_stories, "英文热点", "🇺🇸")
+
+    # 构建column_list结构（Notion标准两列布局）
+    children.append({
+        "object": "block",
+        "type": "column_list",
+        "column_list": {
+            "children": [
+                {
+                    "object": "block",
+                    "type": "column",
+                    "column": {
+                        "children": left_column_children
+                    }
+                },
+                {
+                    "object": "block",
+                    "type": "column",
+                    "column": {
+                        "children": right_column_children
+                    }
+                }
+            ]
         }
     })
 
-    # 添加TOP 3新闻
-    for i, item in enumerate(stories_with_pages[:3], 1):
-        story = item["story"]
-        page_id = item["page_id"]
-        keyword = story.get("keyword", "")
-        story_id = story.get("id", "")
-
-        # 计算时间（简化处理）
-        created_at = story.get("created_at", "")
-        if created_at:
-            try:
-                # 简单的时间处理
-                hours_ago = "未知"
-            except:
-                hours_ago = "未知"
-        else:
-            hours_ago = "未知"
-
-        # 注意力指数（如果没有，使用默认值）
-        attention_score = story.get("attention_score", 0)
-
-        # 创建Callout块（TOP 3用callout突出显示）
-        # 链接到详细页面
-        page_url = f"https://www.notion.so/{page_id.replace('-', '')}"
-
-        # Notion API 需要使用 link 字段，不支持 Markdown 格式
-        children.append({
-            "object": "block",
-            "type": "callout",
-            "callout": {
-                "rich_text": [
-                    {"type": "text", "text": {"content": f"💎 {i}. "}},
-                    {
-                        "type": "text",
-                        "text": {"content": keyword, "link": {"url": page_url}}
-                    },
-                    {"type": "text", "text": {"content": f" | ⏰ {hours_ago} | 📊 {attention_score:,}"}}
-                ]
-            }
-        })
-
-    # 4-30 区块（使用项目符号列表）
-    if len(stories_with_pages) > 3:
-        children.append({
-            "object": "block",
-            "type": "heading_3",
-            "heading_3": {
-                "rich_text": [{"type": "text", "text": {"content": f"📋 其他热点 (4-{len(stories_with_pages)})"}}]
-            }
-        })
-
-        # 添加4-N新闻列表（包含所有剩余新闻）
-        for item in stories_with_pages[3:]:
-            story = item["story"]
-            page_id = item["page_id"]
-            keyword = story.get("keyword", "")
-            story_id = story.get("id", "")
-            attention_score = story.get("attention_score", 0)
-
-            # 创建列表项
-            page_url = f"https://www.notion.so/{page_id.replace('-', '')}"
-
-            # Notion API 需要使用 link 字段，不支持 Markdown 格式
-            children.append({
-                "object": "block",
-                "type": "bulleted_list_item",
-                "bulleted_list_item": {
-                    "rich_text": [
-                        {"type": "text", "text": {"content": f"{item['rank']}. "}},
-                        {
-                            "type": "text",
-                            "text": {"content": keyword, "link": {"url": page_url}}
-                        },
-                        {"type": "text", "text": {"content": f" | 📈 {attention_score:,}"}}
-                    ]
-                }
-            })
-
-    # 3. 批量添加到父页面（每次最多添加100个block）
+    # 4. 批量添加到父页面
     batch_size = 100
     for i in range(0, len(children), batch_size):
         batch = children[i:i+batch_size]
         payload = {"children": batch}
 
         try:
-            # 使用PATCH而不是POST来添加子内容
             response = requests.patch(url, headers=headers, json=payload, timeout=30)
             response.raise_for_status()
         except Exception as e:
@@ -603,10 +636,8 @@ def update_parent_page_with_news_list(stories_with_pages: List[Dict]):
                     log_error(f"  响应内容: {e.response.text[:500]}")
             return False
 
-    log_success("父页面新闻列表已更新")
+    log_success("父页面新闻列表已更新（Notion标准左右两列）")
     return True
-
-# ============ 主函数 ============
 
 def main():
     """主函数"""
@@ -651,21 +682,20 @@ def main():
         timeline = get_story_timeline(story_id)
         authors = get_story_authors(story_id)
 
-        # 创建详细页面（在父页面下）
-        page_id = create_story_page(NOTION_PARENT_PAGE_ID, story, "zh",
+        # 创建详细页面(直接在数据库中创建,避免被删除)
+        page_id = create_story_page(NOTION_DATABASE_ID, story, "zh",
                                      timeline, authors)
 
         if page_id:
-            # 在数据库中创建条目
-            if add_database_entry(story, page_id, "zh", len(timeline)):
-                # 收集故事数据，用于更新父页面
-                stories_with_pages.append({
-                    "story": story,
-                    "page_id": page_id,
-                    "rank": len(stories_with_pages) + 1,
-                    "lang": "zh"
-                })
-                log_success(f"✅ 完成: {keyword[:30]}")
+            # 不再需要单独创建数据库条目,页面已经在数据库中
+            # 收集故事数据,用于更新父页面
+            stories_with_pages.append({
+                "story": story,
+                "page_id": page_id,
+                "rank": len(stories_with_pages) + 1,
+                "lang": "zh"
+            })
+            log_success(f"✅ 完成: {keyword[:30]}")
         else:
             print("❌")
 
@@ -702,21 +732,20 @@ def main():
             timeline = get_story_timeline(story_id)
             authors = get_story_authors(story_id)
 
-            # 创建详细页面（在父页面下）
-            page_id = create_story_page(NOTION_PARENT_PAGE_ID, story, "en",
+            # 创建详细页面(直接在数据库中创建,避免被删除)
+            page_id = create_story_page(NOTION_DATABASE_ID, story, "en",
                                          timeline, authors, translated_summary)
 
             if page_id:
-                # 在数据库中创建条目
-                if add_database_entry(story, page_id, "en", len(timeline), translated_summary):
-                    # 收集故事数据，用于更新父页面
-                    stories_with_pages.append({
-                        "story": story,
-                        "page_id": page_id,
-                        "rank": len(stories_with_pages) + 1,
-                        "lang": "en"
-                    })
-                    log_success(f"✅ 完成: {keyword[:30]}")
+                # 不再需要单独创建数据库条目,页面已经在数据库中
+                # 收集故事数据,用于更新父页面
+                stories_with_pages.append({
+                    "story": story,
+                    "page_id": page_id,
+                    "rank": len(stories_with_pages) + 1,
+                    "lang": "en"
+                })
+                log_success(f"✅ 完成: {keyword[:30]}")
             else:
                 print("❌")
 
