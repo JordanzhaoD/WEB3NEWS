@@ -575,9 +575,9 @@ def update_parent_page_with_news_list(stories_with_pages: List[Dict]):
         "callout": {
             "emoji": {"type": "emoji", "emoji": "⏰"},
             "rich_text": [
-                {"type": "text", "text": {"content": f"最后更新: ", "bold": True}},
+                {"type": "text", "text": {"content": f"最后更新: "}},
                 {"type": "text", "text": {"content": f"{current_time} (北京时间) | "}},
-                {"type": "text", "text": {"content": f"共{len(stories_with_pages)}条新闻", "bold": True}}
+                {"type": "text", "text": {"content": f"共{len(stories_with_pages)}条新闻"}}
             ]
         }
     })
