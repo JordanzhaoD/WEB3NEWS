@@ -456,7 +456,8 @@ def create_news_column_notion_standard(stories: List[Dict], title: str, lang_emo
         })
 
         # 4-30 统一使用bulleted_list_item（正常列表项）
-        for item in stories[3:30]:
+        # 使用enumerate获取正确的序号（4-20），而不是全局rank
+        for idx, item in enumerate(stories[3:30], start=4):
             story = item["story"]
             page_id = item["page_id"]
             keyword = story.get("keyword", "")
@@ -469,7 +470,7 @@ def create_news_column_notion_standard(stories: List[Dict], title: str, lang_emo
                 "type": "bulleted_list_item",
                 "bulleted_list_item": {
                     "rich_text": [
-                        {"type": "text", "text": {"content": f"{item['rank']}. "}},
+                        {"type": "text", "text": {"content": f"{idx}. "}},
                         {
                             "type": "text",
                             "text": {"content": keyword, "link": {"url": page_url}}
