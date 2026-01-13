@@ -418,16 +418,7 @@ def create_news_column_notion_standard(stories: List[Dict], title: str, lang_emo
         "divider": {}
     })
 
-    # TOP 3 区域标题
-    column_children.append({
-        "object": "block",
-        "type": "heading_2",
-        "heading_2": {
-            "rich_text": [{"type": "text", "text": {"content": "🔥 TOP 3"}}]
-        }
-    })
-
-    # 添加TOP 3新闻 - 使用heading_1（大号显示）
+    # 添加TOP 3新闻 - 使用heading_3（中号显示，简约整齐）
     for i, item in enumerate(stories[:3], 1):
         story = item["story"]
         page_id = item["page_id"]
@@ -439,41 +430,32 @@ def create_news_column_notion_standard(stories: List[Dict], title: str, lang_emo
         rank_emojis = ["🥇", "🥈", "🥉"]
         rank_emoji = rank_emojis[i-1]
 
-        # TOP 3 使用heading_1（大号标题）
+        # TOP 3 使用heading_3（中号标题，与4-30统一风格）
         column_children.append({
             "object": "block",
-            "type": "heading_1",
-            "heading_1": {
+            "type": "heading_3",
+            "heading_3": {
                 "rich_text": [
                     {"type": "text", "text": {"content": f"{rank_emoji} "}},
                     {
                         "type": "text",
                         "text": {"content": keyword, "link": {"url": page_url}}
-                    }
+                    },
+                    {"type": "text", "text": {"content": f" · {attention_score:,}"}}
                 ]
             }
         })
 
-        # 热度信息 - 使用callout突出显示
-        column_children.append({
-            "object": "block",
-            "type": "callout",
-            "callout": {
-                "rich_text": [
-                    {"type": "text", "text": {"content": f"📈 热度: {attention_score:,}"}}
-                ]
-            }
-        })
-
-    # 4-30 区域 - 统一使用heading_3（中号标题）
+    # 4-30 区域 - 使用bulleted_list_item（正常项目列表，简约整齐）
     if len(stories) > 3:
+        # 分隔线
         column_children.append({
             "object": "block",
             "type": "divider",
             "divider": {}
         })
 
-        # 4-30 统一使用heading_3，不再分区
+        # 4-30 统一使用bulleted_list_item（正常列表项）
         for item in stories[3:30]:
             story = item["story"]
             page_id = item["page_id"]
@@ -481,11 +463,11 @@ def create_news_column_notion_standard(stories: List[Dict], title: str, lang_emo
             attention_score = story.get("attention_score", 0)
             page_url = f"https://www.notion.so/{page_id.replace('-', '')}"
 
-            # 4-30 统一使用heading_3（中号标题）
+            # 使用bulleted_list_item（正常项目列表）
             column_children.append({
                 "object": "block",
-                "type": "heading_3",
-                "heading_3": {
+                "type": "bulleted_list_item",
+                "bulleted_list_item": {
                     "rich_text": [
                         {"type": "text", "text": {"content": f"{item['rank']}. "}},
                         {
